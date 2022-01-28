@@ -84,6 +84,18 @@ spec:
           - |
             consul-k8s-control-plane acl-init \
               -acl-auth-method="{{ template "consul.fullname" . }}-k8s-component-auth-method" \
+              {{- if .Values.global.enableConsulNamespaces }}
+              -enable-namespaces=true \
+              {{- if .Values.connectInject.consulNamespaces.consulDestinationNamespace }}
+              -consul-destination-namespace={{ .Values.connectInject.consulNamespaces.consulDestinationNamespace }} \
+              {{- end }}
+              {{- if .Values.connectInject.consulNamespaces.mirroringK8S }}
+              -enable-k8s-namespace-mirroring=true \
+              {{- if .Values.connectInject.consulNamespaces.mirroringK8SPrefix }}
+              -k8s-namespace-mirroring-prefix={{ .Values.connectInject.consulNamespaces.mirroringK8SPrefix }} \
+              {{- end }}
+              {{- end }}
+              {{- end }}
               -k8s-namespace={{ .Release.Namespace }}
         resources:
           requests:

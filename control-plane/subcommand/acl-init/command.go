@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/hashicorp/consul-k8s/control-plane/namespaces"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -55,6 +56,13 @@ type Command struct {
 	flagLogLevel               string
 	flagLogJSON                bool
 
+	// Flags to support Consul namespaces
+	flagEnableNamespaces           bool   // Use namespacing on all components
+	flagConsulDestinationNamespace string // Consul namespace to register everything if not mirroring
+	flagEnableK8SNSMirroring       bool   // Enables mirroring of k8s namespaces into Consul
+	flagK8SNSMirroringPrefix       string // Prefix added to Consul namespaces created when mirroring
+	flagCrossNamespaceACLPolicy    string // The name of the ACL policy to add to every created namespace if ACLs are enabled
+
 	bearerTokenFile string // Location of the bearer token. Default is /var/run/secrets/kubernetes.io/serviceaccount/token.
 	tokenSinkFile   string // Location to write the output token. Default is defaultTokenSinkFile.
 
@@ -90,6 +98,19 @@ func (c *Command) init() {
 			"\"debug\", \"info\", \"warn\", and \"error\".")
 	c.flags.BoolVar(&c.flagLogJSON, "log-json", false,
 		"Enable or disable JSON output format for logging.")
+	// Flags related to namespaces.
+	c.flags.BoolVar(&c.flagEnableNamespaces, "enable-namespaces", false,
+		"[Enterprise Only] Enables namespaces, in either a single Consul namespace or mirrored.")
+	c.flags.StringVar(&c.flagConsulDestinationNamespace, "consul-destination-namespace", "default",
+		"[Enterprise Only] Defines which Consul namespace to register all injected services into. If '-enable-k8s-namespace-mirroring' "+
+			"is true, this is not used.")
+	c.flags.BoolVar(&c.flagEnableK8SNSMirroring, "enable-k8s-namespace-mirroring", false, "[Enterprise Only] Enables "+
+		"k8s namespace mirroring.")
+	c.flags.StringVar(&c.flagK8SNSMirroringPrefix, "k8s-namespace-mirroring-prefix", "",
+		"[Enterprise Only] Prefix that will be added to all k8s namespaces mirrored into Consul if mirroring is enabled.")
+	c.flags.StringVar(&c.flagCrossNamespaceACLPolicy, "consul-cross-namespace-acl-policy", "",
+		"[Enterprise Only] Name of the ACL policy to attach to all created Consul namespaces to allow service "+
+			"discovery across Consul namespaces. Only necessary if ACLs are enabled.")
 
 	if c.bearerTokenFile == "" {
 		c.bearerTokenFile = defaultBearerTokenFile
@@ -144,7 +165,7 @@ func (c *Command) Run(args []string) int {
 
 	if c.flagACLAuthMethod != "" {
 		cfg := api.DefaultConfig()
-		cfg.Namespace = c.flagConsulServiceNamespace
+		cfg.Namespace = c.consulNamespace(c.flagConsulServiceNamespace)
 		c.http.MergeOntoConfig(cfg)
 		if c.consulClient == nil {
 			c.consulClient, err = consul.NewClient(cfg)
@@ -267,6 +288,12 @@ func (c *Command) Run(args []string) int {
 	}
 
 	return 0
+}
+
+// consulNamespace returns the Consul destination namespace for a provided Kubernetes namespace
+// depending on Consul Namespaces being enabled and the value of namespace mirroring.
+func (c *Command) consulNamespace(namespace string) string {
+	return namespaces.ConsulNamespace(namespace, c.flagEnableNamespaces, c.flagConsulDestinationNamespace, c.flagEnableK8SNSMirroring, c.flagK8SNSMirroringPrefix)
 }
 
 func (c *Command) getSecret(secretName string) (string, error) {
