@@ -559,28 +559,6 @@ load _helpers
 #--------------------------------------------------------------------
 # aclToken
 
-@test "controller/Deployment: aclToken disabled when secretName is missing" {
-  cd `chart_dir`
-  local actual=$(helm template \
-      -s templates/controller-deployment.yaml  \
-      --set 'controller.enabled=true' \
-      --set 'controller.aclToken.secretKey=bar' \
-      . | tee /dev/stderr |
-      yq '[.spec.template.spec.containers[0].env[].name] | any(contains("CONSUL_HTTP_TOKEN"))' | tee /dev/stderr)
-  [ "${actual}" = "false" ]
-}
-
-@test "controller/Deployment: aclToken disabled when secretKey is missing" {
-  cd `chart_dir`
-  local actual=$(helm template \
-      -s templates/controller-deployment.yaml  \
-      --set 'controller.enabled=true' \
-      --set 'controller.aclToken.secretName=foo' \
-      . | tee /dev/stderr |
-      yq '[.spec.template.spec.containers[0].env[].name] | any(contains("CONSUL_HTTP_TOKEN"))' | tee /dev/stderr)
-  [ "${actual}" = "false" ]
-}
-
 @test "controller/Deployment: aclToken enabled when secretName and secretKey is provided" {
   cd `chart_dir`
   local actual=$(helm template \

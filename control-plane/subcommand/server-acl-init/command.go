@@ -737,16 +737,15 @@ func (c *Command) Run(args []string) int {
 			// globally unique so we append the datacenter name but only in secondary datacenters..
 			policyName += fmt.Sprintf("-%s", consulDC)
 		}
-		apl := []*api.ACLRolePolicyLink{
-			&api.ACLRolePolicyLink{
-				Name: policyName,
-			},
+		ap := &api.ACLRolePolicyLink{
+			Name: policyName,
 		}
+		apl := []*api.ACLRolePolicyLink{}
+		apl = append(apl, ap)
 
 		authMethodName := c.withPrefix("k8s-component-auth-method")
 		serviceAccountName := fmt.Sprintf("%s-controller", c.flagResourcePrefix)
 		err = c.addRoleAndBindingRule(consulClient, serviceAccountName, authMethodName, apl)
-		c.log.Error("=========== here 2 ", err)
 		if err != nil {
 			c.log.Error(err.Error())
 			return 1
@@ -935,7 +934,7 @@ func (c *Command) addRoleAndBindingRule(client *api.Client, serviceAccountName s
 
 	err := c.updateOrCreateACLRole(client, role)
 	if err != nil {
-		c.log.Error("====== unable to update or create ACL Role", err)
+		c.log.Error("unable to update or create ACL Role", err)
 		return err
 	}
 
@@ -1037,7 +1036,6 @@ func (c *Command) updateOrCreateBindingRule(client *api.Client, authMethodName s
 				return err
 			})
 	}
-	c.log.Error("========= here", err)
 	return err
 }
 
