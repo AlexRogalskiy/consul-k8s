@@ -146,6 +146,8 @@ spec:
                   consul-k8s-control-plane consul-logout
         {{- end }}
         env:
+        - name: CONSUL_HTTP_TOKEN_FILE
+          value: "/consul/connect-inject/acl-token"
         - name: HOST_IP
           valueFrom:
             fieldRef:

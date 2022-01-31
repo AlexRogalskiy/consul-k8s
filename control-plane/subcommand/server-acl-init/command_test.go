@@ -533,6 +533,7 @@ func TestRun_TokensReplicatedDC(t *testing.T) {
 					require.True(t, ok)
 					tokens = append(tokens, string(token))
 				}
+				time.Sleep(time.Second * 1)
 				for i := range tokens {
 					// Test that the token has the expected policies in Consul.
 					tokenData, _, err := consul.ACL().TokenReadSelf(&api.QueryOptions{Token: tokens[i]})

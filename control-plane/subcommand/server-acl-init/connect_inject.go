@@ -1,7 +1,6 @@
 package serveraclinit
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/hashicorp/consul-k8s/control-plane/namespaces"
@@ -18,7 +17,7 @@ const defaultKubernetesHost = "https://kubernetes.default.svc"
 
 // configureConnectInject sets up auth methods so that connect injection will
 // work.
-func (c *Command) configureConnectInjectAuthMethod(consulClient *api.Client, authMethodName string) error {
+func (c *Command) configureKubernetesAuthMethod(consulClient *api.Client, authMethodName string, createInjectBindingRule bool) error {
 
 	// Create the auth method template. This requires calls to the
 	// kubernetes environment.
@@ -66,70 +65,17 @@ func (c *Command) configureConnectInjectAuthMethod(consulClient *api.Client, aut
 		return err
 	}
 
-	// Create the binding rule.
-	abr := api.ACLBindingRule{
-		Description: "Kubernetes binding rule",
-		AuthMethod:  authMethodName,
-		BindType:    api.BindingRuleBindTypeService,
-		BindName:    "${serviceaccount.name}",
-		Selector:    c.flagBindingRuleSelector,
-	}
-
-	// Binding rule list api call query options
-	queryOptions := api.QueryOptions{}
-
-	// Add a namespace if appropriate
-	// If namespaces and mirroring are enabled, this is not necessary because
-	// the binding rule will fall back to being created in the Consul `default`
-	// namespace automatically, as is necessary for mirroring.
-	if c.flagEnableNamespaces && !c.flagEnableInjectK8SNSMirroring {
-		abr.Namespace = c.flagConsulInjectDestinationNamespace
-		queryOptions.Namespace = c.flagConsulInjectDestinationNamespace
-	}
-
-	var existingRules []*api.ACLBindingRule
-	err = c.untilSucceeds(fmt.Sprintf("listing binding rules for auth method %s", authMethodName),
-		func() error {
-			var err error
-			existingRules, _, err = consulClient.ACL().BindingRuleList(authMethodName, &queryOptions)
-			return err
-		})
-	if err != nil {
-		return err
-	}
-
-	// If the binding rule already exists, update it
-	// This updates the binding rule any time the acl bootstrapping
-	// command is rerun, which is a bit of extra overhead, but is
-	// necessary to pick up any potential config changes.
-	if len(existingRules) > 0 {
-		// Find the policy that matches our name and description
-		// and that's the ID we need
-		for _, existingRule := range existingRules {
-			if existingRule.BindName == abr.BindName && existingRule.Description == abr.Description {
-				abr.ID = existingRule.ID
-			}
+	if createInjectBindingRule {
+		c.log.Info("creating inject binding rule")
+		// Create the binding rule.
+		abr := api.ACLBindingRule{
+			Description: "Kubernetes binding rule",
+			AuthMethod:  authMethodName,
+			BindType:    api.BindingRuleBindTypeService,
+			BindName:    "${serviceaccount.name}",
+			Selector:    c.flagBindingRuleSelector,
 		}
-
-		// This will only happen if there are existing policies
-		// for this auth method, but none that match the binding
-		// rule set up here in the bootstrap method.
-		if abr.ID == "" {
-			return errors.New("unable to find a matching ACL binding rule to update")
-		}
-
-		err = c.untilSucceeds(fmt.Sprintf("updating acl binding rule for %s", authMethodName),
-			func() error {
-				_, _, err := consulClient.ACL().BindingRuleUpdate(&abr, nil)
-				return err
-			})
-	} else {
-		// Otherwise create the binding rule
-		err = c.untilSucceeds(fmt.Sprintf("creating acl binding rule for %s", authMethodName),
-			func() error {
-				_, _, err := consulClient.ACL().BindingRuleCreate(&abr, nil)
-				return err
-			})
+		return c.updateOrCreateBindingRule(consulClient, authMethodName, &abr)
 	}
 	return err
 }
